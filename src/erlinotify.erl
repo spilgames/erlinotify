@@ -2,6 +2,10 @@
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
 
+-define(log(T),
+        error_logger:info_report(
+          [process_info(self(),current_function),{line,?LINE},T])).
+
 %% ------------------------------------------------------------------
 %% API Function Exports
 %% ------------------------------------------------------------------
@@ -100,17 +104,16 @@ take_first(F,[H|T]) ->
     end.
 
 do_watch(File, State) ->
-    try of
-        {ok, WD} = talk_to_port(LD#ld.port,{add, State#ld.fd, File, all}),
-        State
+    try talk_to_port(State#state.port,{add, State#state.fd, File, all})
+    of {ok, WD} -> State
     catch C:R ->
             ?log([{error_watching_file, File},{C, R}]),
             State
     end.
 
 do_unwatch(File, State) ->
-    try of
-        talk_to_port(State#ld.port, {remove, State#ld.fd, File}),
+    try
+        talk_to_port(State#state.port, {remove, State#state.fd, File}),
         State
     catch C:R ->
             ?log([{error_unwatching_file, File}, {C, R}]),
@@ -118,13 +121,13 @@ do_unwatch(File, State) ->
     end.
 
 talk_to_port(Port, Msg) ->
-  try of
+  try
       erlang:port_command(Port, term_to_binary(Msg)),
       receive {Port, {data, D = <<131,104,2,_/binary>>}} ->
               binary_to_term(D)
       after 1000 ->
               throw(talk_to_port_timeout)
-    end
+      end
   catch _:R ->
           throw({talking_to_port_failed, {R, Port, Msg}})
   end.
