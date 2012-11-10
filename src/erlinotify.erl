@@ -49,10 +49,13 @@ unwatch(File) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init([Callback]) ->
-    Port =open_port(),
-    {ok,FD} = talk_to_port(Port, {open}),
-    {ok, #state{port=Port, fd=FD, callback=Callback}}.
+init([]) ->
+    %%Port =open_port(),
+    %%{ok,FD} = talk_to_port(Port, {open}),
+    State = erlinotify_nif:start_watcher(),
+    io:fwrite(standard_error,"Foo ~p~n",[State]),
+    io:fwrite(standard_error,"~p~n",[self()]),
+    {ok, State}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.

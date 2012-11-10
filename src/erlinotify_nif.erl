@@ -1,11 +1,13 @@
 -module(erlinotify_nif).
 
--export([new/0,
+-export([start/0,
+         stop/1,
          init/0,
-         me/0,
-         myfunction/1]).
+         onhook/0,
+         add_watch/2,
+         remove_watch/2]).
 
-%%-on_load(init/0).
+-on_load(init/0).
 
 -define(nif_stub, nif_stub_error(?LINE)).
 nif_stub_error(Line) ->
@@ -27,23 +29,33 @@ init() ->
     io:fwrite("~p~n",[self()]),
     erlang:load_nif(filename:join(PrivDir, ?MODULE), 0).
 
-new() ->
+start() ->
     ?nif_stub.
 
-myfunction(_Ref) ->
+stop(_Ref) ->
     ?nif_stub.
 
-me()->
-    self().
+add_watch(_Ref, _Dirname) ->
+    ?nif_stub.
+
+remove_watch(_Ref, _Wd) ->
+    ?nif_stub.
+
+onhook() ->
+    receive
+        Event -> io:fwrite(standard_error,"~p~n",[Event])
+    end.
+
 %% ===================================================================
 %% EUnit tests
 %% ===================================================================
 -ifdef(TEST).
 
 basic_test() ->
-    {ok, Ref} = new(),
-    io:fwrite("~p~n",[self()]),
-    io:fwrite("~p~n",[me()]),
-    ?assertEqual(ok, myfunction(Ref)).
+    {ok, Ref} = start(),
+    ?assertEqual({ok,1}, add_watch(Ref, "/tmp/")),
+    ?assertEqual(ok, remove_watch(Ref, 1)),
+    ?assertEqual(ok, stop(Ref)).
+
 
 -endif.
