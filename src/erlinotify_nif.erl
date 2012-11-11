@@ -3,7 +3,6 @@
 -export([start/0,
          stop/1,
          init/0,
-         onhook/0,
          add_watch/2,
          remove_watch/2]).
 
@@ -40,11 +39,6 @@ add_watch(_Ref, _Dirname) ->
 
 remove_watch(_Ref, _Wd) ->
     ?nif_stub.
-
-onhook() ->
-    receive
-        Event -> io:fwrite(standard_error,"~p~n",[Event])
-    end.
 
 %% ===================================================================
 %% EUnit tests

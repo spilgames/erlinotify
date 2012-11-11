@@ -5,6 +5,10 @@
 -define(log(T),
         error_logger:info_report(
           [process_info(self(),current_function),{line,?LINE},T])).
+%% TODO
+%% Docs
+%% Ets table to store Dir
+%% Callback addition
 
 %% ------------------------------------------------------------------
 %% API Function Exports
@@ -23,7 +27,7 @@
 %% Record Definitions
 %% ------------------------------------------------------------------
 
--record(state, {port, fd, callback}).
+-record(state, {tablename="erlinotify_ets", fd, callback}).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -39,7 +43,6 @@ stop() ->
   gen_server:cast(?MODULE, stop).
 
 watch(File) ->
-  start(),
   gen_server:cast(?MODULE, {watch, File}).
 
 unwatch(File) ->
@@ -50,12 +53,10 @@ unwatch(File) ->
 %% ------------------------------------------------------------------
 
 init([]) ->
-    %%Port =open_port(),
-    %%{ok,FD} = talk_to_port(Port, {open}),
-    State = erlinotify_nif:start_watcher(),
-    io:fwrite(standard_error,"Foo ~p~n",[State]),
-    io:fwrite(standard_error,"~p~n",[self()]),
-    {ok, State}.
+    {ok,Fd} = erlinotify_nif:start(),
+    io:fwrite(standard_error,"~p~n",[Fd]),
+    X = fun(E) -> io:fwrite(standard_error,"~p~n",[E]) end,
+    {ok, #state{fd=Fd, callback=X}}.
 
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
@@ -70,15 +71,17 @@ handle_cast(Msg, State) ->
   ?log({unknown_message, Msg}),
   {noreply, State}.
 
-handle_info({Port, {data, Msg}}, State = #state{port=Port, callback=Callback}) ->
-  Callback(binary_to_term(Msg)),
+handle_info({inotify_event, Wd, Type, Event, Cookie, Name}, State) ->
+  CB = State#state.callback,
+  CB({Wd, Type, Event, Cookie, Name}),
   {noreply, State};
 handle_info(Info, State) ->
   ?log({unknown_message, Info}),
   {noreply, State}.
 
 terminate(_Reason, State) ->
-  talk_to_port(State#state.port, {close, State#state.fd}).
+    erlinotify_nif:stop(State#state.fd),
+    {close, State#state.fd}.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
@@ -87,50 +90,19 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-open_port() ->
-    Parts = [[filename:dirname(code:which(?MODULE)), "..", c_src],
-             [code:priv_dir(inotify), bin]],
-    try E = take_first(fun to_file/1, Parts),
-          io:fwrite("using: ~p~n", [E]),
-          open_port({spawn, E},[{packet, 2}, binary, exit_status])
-    catch _:_ -> exit({inotify_binary_not_found, Parts})
-    end.
-
-to_file(Parts) ->
-    true = filelib:is_regular(F=filename:join(Parts++[inotify])),
-    F.
-
-take_first(_,[]) -> exit({take_first, nothing_worked});
-take_first(F,[H|T]) ->
-    try F(H)
-    catch _:_ -> take_first(F,T)
-    end.
-
 do_watch(File, State) ->
-    try talk_to_port(State#state.port,{add, State#state.fd, File, all})
-    of {ok, WD} -> State
+    try erlinotify_nif:add_watch(State#state.fd, File)
+    of {ok, _WD} -> State
     catch C:R ->
             ?log([{error_watching_file, File},{C, R}]),
             State
     end.
 
-do_unwatch(File, State) ->
-    try
-        talk_to_port(State#state.port, {remove, State#state.fd, File}),
+do_unwatch(Wd, State) ->
+    try erlinotify_nif:remove_watch(State#state.fd, Wd),
         State
     catch C:R ->
-            ?log([{error_unwatching_file, File}, {C, R}]),
+            ?log([{error_unwatching_file, Wd}, {C, R}]),
             State
     end.
 
-talk_to_port(Port, Msg) ->
-  try
-      erlang:port_command(Port, term_to_binary(Msg)),
-      receive {Port, {data, D = <<131,104,2,_/binary>>}} ->
-              binary_to_term(D)
-      after 1000 ->
-              throw(talk_to_port_timeout)
-      end
-  catch _:R ->
-          throw({talking_to_port_failed, {R, Port, Msg}})
-  end.
