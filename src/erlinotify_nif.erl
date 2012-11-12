@@ -2,20 +2,68 @@
 
 -export([start/0,
          stop/1,
-         init/0,
          add_watch/2,
          remove_watch/2]).
 
 -on_load(init/0).
 
+%% ------------------------------------------------------------------
+%% Macro Definitions
+%% ------------------------------------------------------------------
 -define(nif_stub, nif_stub_error(?LINE)).
+
+
+%% ------------------------------------------------------------------
+%% API Function Definitions
+%% ------------------------------------------------------------------
+
+%% @spec start() -> {ok,term()} | {error, errorinfo()}
+%%
+%%
+%% @doc Start inotify by creating a file descriptor and spawing a
+%% thread that will poll the file descriptor for any events.
+start() ->
+    ?nif_stub.
+
+%% @spec stop(Result) -> {ok,term()} | {error, errorinfo()}
+%%
+%%
+%% @doc Stop inotify by closing the file descriptor to it and
+%% implicitly killing the spawned thread?
+stop(_Ref) ->
+    ?nif_stub.
+
+%% @spec add_watch(Result, Dirname) -> {ok,int()} | {error, errorinfo()}
+%%       Result = term()
+%%       Dirname = filelib:dirname()
+%%
+%% @doc Add a directoy to watch for changes returning an integer
+%% referance to it.
+add_watch(_Ref, _Dirname) ->
+    ?nif_stub.
+
+%% @spec remove_watch(Result, Wd) -> {ok,int()} | {error, errorinfo()}
+%%       Result = term()
+%%       Wd = int()
+%%
+%% @doc Remove a watching directory by supplying the integer reference.
+remove_watch(_Ref, _Wd) ->
+    ?nif_stub.
+
+%% ------------------------------------------------------------------
+%% Internal Function Definitions
+%% ------------------------------------------------------------------
+
+%% @spec nif_stub_error(Linenumber)
+%%       Linenumber = int()
+%%
+%% @doc Log failed linked method call.
 nif_stub_error(Line) ->
     erlang:nif_error({nif_not_loaded,module,?MODULE,line,Line}).
 
--ifdef(TEST).
--include_lib("eunit/include/eunit.hrl").
--endif.
-
+%% @spec init() -> ok | {error, {atom(), string()}}
+%%
+%% @doc Load the c library
 init() ->
     PrivDir = case code:priv_dir(?MODULE) of
                   {error, bad_name} ->
@@ -25,25 +73,14 @@ init() ->
                   Path ->
                       Path
               end,
-    io:fwrite("~p~n",[self()]),
     erlang:load_nif(filename:join(PrivDir, ?MODULE), 0).
-
-start() ->
-    ?nif_stub.
-
-stop(_Ref) ->
-    ?nif_stub.
-
-add_watch(_Ref, _Dirname) ->
-    ?nif_stub.
-
-remove_watch(_Ref, _Wd) ->
-    ?nif_stub.
 
 %% ===================================================================
 %% EUnit tests
 %% ===================================================================
 -ifdef(TEST).
+
+-include_lib("eunit/include/eunit.hrl").
 
 basic_test() ->
     {ok, Ref} = start(),

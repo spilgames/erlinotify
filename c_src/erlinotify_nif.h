@@ -3,6 +3,16 @@
 
 #include "erl_nif.h"
 
+typedef struct
+{
+  ErlNifThreadOpts* opts;
+  ErlNifTid qthread;
+  int fd;
+  ErlNifPid* pid;
+} state_t;
+
+static ErlNifResourceType* erlinotify_nif_RESOURCE = NULL;
+
 static ERL_NIF_TERM
 erlinotify_nif_start(ErlNifEnv* env, int argc,
                              const ERL_NIF_TERM argv[]);

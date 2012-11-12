@@ -12,16 +12,6 @@
 // Thread termination when joined?
 // Terminate Thread on stop?
 
-typedef struct
-{
-  ErlNifThreadOpts* opts;
-  ErlNifTid qthread;
-  int fd;
-  ErlNifPid* pid;
-} state_t;
-
-static ErlNifResourceType* erlinotify_nif_RESOURCE = NULL;
-
 #define MAXBUFLEN 1024
 
 static ErlNifFunc nif_funcs[] =
@@ -259,7 +249,7 @@ atom_event(ErlNifEnv* env, ulong mask) {
     return enif_make_atom(env, "access");
   }
   if (mask & IN_ATTRIB) {
-    return enif_make_atom(env, "attrib");
+    return enif_make_atom(env, "attribute");
   }
   if (mask & IN_CLOSE_WRITE) {
     return enif_make_atom(env, "close_write");

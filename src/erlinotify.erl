@@ -27,6 +27,10 @@
 %% Record Definitions
 %% ------------------------------------------------------------------
 
+%% @type state() = Record :: #state{ tablename = string(),
+%%                                   fd = term(),
+%%                                   callback= term() }.
+
 -record(state, {tablename="erlinotify_ets", fd, callback}).
 
 %% ------------------------------------------------------------------
@@ -36,21 +40,17 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
-start() ->
-  gen_server:start({local, ?MODULE}, ?MODULE, [], []).
-
-stop() ->
-  gen_server:cast(?MODULE, stop).
-
-watch(File) ->
-  gen_server:cast(?MODULE, {watch, File}).
-
-unwatch(File) ->
-  gen_server:cast(?MODULE, {unwatch, File}).
-
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
+
+%%----------------------------------------------------------------------
+%% Func: init/1
+%% Returns: {ok, State} |
+%%          {ok, State, Timeout} |
+%%          ignore |
+%%          {stop, Reason}
+%%----------------------------------------------------------------------
 
 init([]) ->
     {ok,Fd} = erlinotify_nif:start(),
@@ -58,9 +58,24 @@ init([]) ->
     X = fun(E) -> io:fwrite(standard_error,"~p~n",[E]) end,
     {ok, #state{fd=Fd, callback=X}}.
 
+%%----------------------------------------------------------------------
+%% Func: handle_call/3
+%% Returns: {reply, Reply, State} |
+%%          {reply, Reply, State, Timeout} |
+%%          {noreply, State} |
+%%          {noreply, State, Timeout} |
+%%          {stop, Reason, Reply, State} | (terminate/2 is called)
+%%          {stop, Reason, State} (terminate/2 is called)
+%%----------------------------------------------------------------------
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
+%%----------------------------------------------------------------------
+%% Func: handle_cast/2
+%% Returns: {noreply, State} |
+%%          {noreply, State, Timeout} |
+%%          {stop, Reason, State} (terminate/2 is called)
+%%----------------------------------------------------------------------
 handle_cast(stop, State) ->
   {stop, normal, State};
 handle_cast({watch, Watch}, State) ->
@@ -71,6 +86,12 @@ handle_cast(Msg, State) ->
   ?log({unknown_message, Msg}),
   {noreply, State}.
 
+%%----------------------------------------------------------------------
+%% Func: handle_info/2
+%% Returns: {noreply, State} |
+%%          {noreply, State, Timeout} |
+%%          {stop, Reason, State} (terminate/2 is called)
+%%----------------------------------------------------------------------
 handle_info({inotify_event, Wd, Type, Event, Cookie, Name}, State) ->
   CB = State#state.callback,
   CB({Wd, Type, Event, Cookie, Name}),
@@ -79,6 +100,11 @@ handle_info(Info, State) ->
   ?log({unknown_message, Info}),
   {noreply, State}.
 
+%%----------------------------------------------------------------------
+%% Func: terminate/2
+%% Purpose: Shutdown the server
+%% Returns: any (ignored by gen_server)
+%%----------------------------------------------------------------------
 terminate(_Reason, State) ->
     erlinotify_nif:stop(State#state.fd),
     {close, State#state.fd}.
@@ -90,6 +116,9 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+%% @spec (string(), state()) -> state()
+%% @doc Makes a call to the nif to add a resource to
+%% watch. Logs on error
 do_watch(File, State) ->
     try erlinotify_nif:add_watch(State#state.fd, File)
     of {ok, _WD} -> State
@@ -98,6 +127,9 @@ do_watch(File, State) ->
             State
     end.
 
+%% @spec (int(), state()) -> state()
+%% @doc Makes a call to the nif to remove a resource to
+%% watch. Logs on error
 do_unwatch(Wd, State) ->
     try erlinotify_nif:remove_watch(State#state.fd, Wd),
         State
