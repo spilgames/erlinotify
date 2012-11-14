@@ -27,11 +27,12 @@
 %% Record Definitions
 %% ------------------------------------------------------------------
 
-%% @type state() = Record :: #state{ tablename = string(),
-%%                                   fd = term(),
+%% @type state() = Record :: #state{ fd = term(),
+%%                                   dirnames = ets:dirnames(),
+%%                                   watchdescriptors = ets:dirnames(),
 %%                                   callback= term() }.
 
--record(state, {tablename="erlinotify_ets", fd, callback}).
+-record(state, {fd, callback, dirnames, watchdescriptors}).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -92,10 +93,14 @@ handle_cast(Msg, State) ->
 %%          {noreply, State, Timeout} |
 %%          {stop, Reason, State} (terminate/2 is called)
 %%----------------------------------------------------------------------
-handle_info({inotify_event, Wd, Type, Event, Cookie, Name}, State) ->
+handle_info({inotify_event, Wd, Type, Event, Cookie, Name} = Info, State) ->
   CB = State#state.callback,
-  CB({Wd, Type, Event, Cookie, Name}),
-  {noreply, State};
+  case ets:lookup(State#state.watchdescriptors, Wd) of
+      [] -> ?log({unknown_file_watch, Info}),
+            {noreply, State};
+      [{Wd, File}] -> CB({File, Type, Event, Cookie, Name}),
+                      {noreply, State}
+  end;
 handle_info(Info, State) ->
   ?log({unknown_message, Info}),
   {noreply, State}.
@@ -116,25 +121,49 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
-%% @spec (string(), state()) -> state()
+%% @spec (Dirname, State) -> state()
+%%        State = state()
+%%        Dirname = filelib:dirname()
 %% @doc Makes a call to the nif to add a resource to
 %% watch. Logs on error
 do_watch(File, State) ->
-    try erlinotify_nif:add_watch(State#state.fd, File)
-    of {ok, _WD} -> State
-    catch C:R ->
-            ?log([{error_watching_file, File},{C, R}]),
-            State
+    case erlinotify_nif:add_watch(State#state.fd, File) of
+        {ok, Wd} -> ets:insert(State#state.dirnames, {File, Wd}),
+                    ets:insert(State#state.watchdescriptors, {Wd, File}),
+                    State;
+        Error -> Error
     end.
 
-%% @spec (int(), state()) -> state()
+%% @spec (Dirname, State) -> state()
+%%        State = state()
+%%        Dirname = filelib:dirname()
 %% @doc Makes a call to the nif to remove a resource to
 %% watch. Logs on error
-do_unwatch(Wd, State) ->
-    try erlinotify_nif:remove_watch(State#state.fd, Wd),
-        State
-    catch C:R ->
-            ?log([{error_unwatching_file, Wd}, {C, R}]),
-            State
+do_unwatch(File, State) ->
+    case ets:lookup(State#state.dirnames, File) of
+        [] -> State;
+        [{File,Wd}] -> case erlinotify_nif:remove_watch(State#state.fd, Wd) of
+                  ok -> ets:delete(State#state.dirnames, File),
+                        ets:delete(State#state.watchdescriptors, Wd),
+                        State;
+                  Error -> Error
+              end
     end.
+
+%% @spec (state()) -> ok
+%% @doc Rewatch everything in the ets table. Assigning a new
+%% Wd as we move through.
+rewatch(State) ->
+    case ets:delete_all_objects(State#state.watchdescriptors) of
+        true ->  Key = ets:first(State#state.dirnames),
+                 rewatch(State, Key);
+        Error -> Error
+    end.
+
+rewatch(State, '$end_of_table') ->
+    {ok, State};
+rewatch(State, Key) ->
+    do_watch(Key, State),
+    NextKey = ets:next(State#state.dirnames, Key),
+    rewatch(State, NextKey).
 

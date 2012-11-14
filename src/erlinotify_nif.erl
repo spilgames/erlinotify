@@ -42,7 +42,7 @@ stop(_Ref) ->
 add_watch(_Ref, _Dirname) ->
     ?nif_stub.
 
-%% @spec remove_watch(Result, Wd) -> {ok,int()} | {error, errorinfo()}
+%% @spec remove_watch(Result, Wd) -> ok | {error, errorinfo()}
 %%       Result = term()
 %%       Wd = int()
 %%
