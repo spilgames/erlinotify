@@ -28,8 +28,8 @@
 %% ------------------------------------------------------------------
 
 %% @type state() = Record :: #state{ fd = term(),
-%%                                   dirnames = ets:dirnames(),
-%%                                   watchdescriptors = ets:dirnames(),
+%%                                   dirnames = ets:tid(),
+%%                                   watchdescriptors = ets:tid(),
 %%                                   callback= term() }.
 
 -record(state, {fd, callback, dirnames, watchdescriptors}).
