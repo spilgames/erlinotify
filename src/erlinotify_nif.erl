@@ -88,5 +88,22 @@ basic_test() ->
     ?assertEqual(ok, remove_watch(Ref, 1)),
     ?assertEqual(ok, stop(Ref)).
 
+thread_test() ->
+    Path = "/tmp/test/",
+    ok = filelib:ensure_dir(Path),
+    _P = spawn(spawn_watcher(Path)),
+    ok = file:write_file(Path++"monkey", "testing123", [write]).
+
+spawn_watcher(Path) ->
+    fun() ->
+        {ok, Ref} = start(),
+        ?assertEqual({ok,1}, add_watch(Ref, Path)),
+        receive
+            {inotify_event, 1, file, _Event, 0, File} ->
+                io:fwrite(standard_error,"~p~n",[File])
+        end,
+        ?assertEqual(ok, remove_watch(Ref, 1)),
+        ?assertEqual(ok, stop(Ref))
+    end.
 
 -endif.

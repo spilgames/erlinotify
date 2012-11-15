@@ -199,9 +199,9 @@ read_events(void* obj)
     pevent = (struct inotify_event *) &buffer[buffer_i];
     event_size =  offsetof (struct inotify_event, name) + pevent->len;
     buffer_i += event_size;
-    //fprintf(stderr,
-    //        "inotify_erlang:note_read  len: %d idx: %d event %d %x %x %s %d\r\n",
-    //        r, buffer_i, pevent->wd, pevent->mask, pevent->cookie, pevent->name, pevent->len);
+    fprintf(stderr,
+            "inotify_erlang:note_read  len: %d idx: %d event %d %x %x %s %d\r\n",
+            r, buffer_i, pevent->wd, pevent->mask, pevent->cookie, pevent->name, pevent->len);
     msg = enif_make_tuple6(env,
                            enif_make_atom(env, "inotify_event"),
                            enif_make_int(env, pevent->wd),
