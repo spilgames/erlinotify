@@ -43,17 +43,13 @@ start_link() ->
 %%          {stop, Reason}
 %%----------------------------------------------------------------------
 init([]) ->
-    Opts = [set, protected, {keypos,1}, {heir,self()},
+    Opts = [set, named_table, protected, {keypos,1}, {heir,self(),[]},
             {write_concurrency,false}, {read_concurrency,false}],
     {ok, #state{opts=Opts}}.
 
-handle_call({get, dirname}, {Pid, _Tag}, State) ->
-    %% create table if not exist
-    %% else give back exisiting table to new process
-    %% assign to pid
-    {reply, ok, State};
-handle_call({get, watchdescriptors}, {Pid, _Tag}, State) ->
-    {reply, ok, State};
+handle_call({give_me, Name}, {Pid, _Tag}, State) ->
+    Return = give_me(Name, Pid, State),
+    {reply, Return, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -74,3 +70,66 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+give_me(Name, Pid, State) ->
+    Me = self(),
+    case ets:info(Name) of
+        undefined -> Tid = ets:new(Name, State#state.opts),
+                     case ets:give_away(Tid, Pid, new_table) of
+                         true -> {ok, Tid};
+                         false -> {error, cant_give_away}
+                     end;
+        _Found -> case ets:info(Name, owner) of
+                      Pid -> {error, already_own_table};
+                      Me  -> case ets:give_away(Name, Pid, reissued) of
+                                 true -> {ok, Name}; %% Name =:= Tid
+                                 false -> {error, cant_give_away}
+                             end
+                  end
+    end.
+
+%% ===================================================================
+%% EUnit tests
+%% ===================================================================
+-ifdef(TEST).
+
+-include_lib("eunit/include/eunit.hrl").
+
+give_me_test() ->
+    Name = foo,
+    Opts = [set, named_table, protected, {keypos,1}, {heir,self(),[]},
+            {write_concurrency,false}, {read_concurrency,false}],
+    State = #state{opts=Opts},
+    P = spawn( new_check(Name) ),
+    {ok,Name} = give_me(Name, P, State),
+    %%kill and see if reassigns.
+    exit(P, zeds_dead_baby),
+    return_check(Name, P),
+    Z = spawn( reissue_check(Name) ),
+    {ok,Name} = give_me(Name, Z, State).
+
+new_check(Name) ->
+    fun() ->
+        receive
+            {'ETS-TRANSFER', Tid, _Pid, new_table} ->
+                ?assertEqual( Name, Tid );
+            Error -> ?assertEqual(ok,Error)
+        end
+    end.
+
+return_check(Name, Pid) ->
+    receive
+        {'ETS-TRANSFER', Tid, Pid, []} ->
+            ?assertEqual( Name, Tid );
+        Error -> ?assertEqual(ok, Error)
+    end.
+
+reissue_check(Name) ->
+    fun() ->
+        receive
+            {'ETS-TRANSFER', Tid, _Pid, reissued} ->
+                ?assertEqual( Name, Tid );
+            Error -> ?assertEqual(ok,Error)
+        end
+    end.
+
+-endif.
