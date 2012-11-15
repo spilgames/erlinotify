@@ -13,6 +13,8 @@
 // Terminate Thread on stop?
 
 #define MAXBUFLEN 1024
+#define EVENT_SIZE  ( sizeof (struct inotify_event) )
+#define EVENT_BUF_LEN     ( MAXBUFLEN * ( EVENT_SIZE + 16 ) )
 
 static ErlNifFunc nif_funcs[] =
 {
@@ -79,7 +81,7 @@ erlinotify_nif_stop(ErlNifEnv* env,
 
   if (r < 0) {
     ret = enif_make_tuple2(env, enif_make_atom(env, "error"),
-                           enif_make_string(env, "unable to stop watching\0",
+                           enif_make_string(env, "unable to stop watching",
                                             ERL_NIF_LATIN1)
                            );
   }
@@ -129,7 +131,7 @@ erlinotify_nif_add_watch(ErlNifEnv* env,
   wd = inotify_add_watch(state->fd, dirname, IN_ALL_EVENTS);
   if (wd < 0) {
     ret = enif_make_tuple2(env, enif_make_atom(env, "error"),
-                           enif_make_string(env, "unable to add watch\0",
+                           enif_make_string(env, "unable to add watch",
                                             ERL_NIF_LATIN1)
                            );
   }
@@ -168,7 +170,7 @@ erlinotify_nif_remove_watch(ErlNifEnv* env,
   r = inotify_rm_watch (state->fd, wd);
   if (r < 0) {
     ret = enif_make_tuple2(env, enif_make_atom(env, "error"),
-                           enif_make_string(env, "unable to remove watch\0",
+                           enif_make_string(env, "unable to remove watch",
                                             ERL_NIF_LATIN1)
                            );
   }
@@ -182,33 +184,35 @@ int
 read_events(void* obj)
 {
   state_t* state = (state_t*) obj;
-  char buffer[16384];
-  size_t buffer_i;
-  size_t event_size;
-  ssize_t r;
+  char buffer[EVENT_BUF_LEN];
+  int buffer_i = 0, length;
   int count = 0;
-  struct inotify_event *pevent;
   ErlNifEnv* env = enif_alloc_env();
   ERL_NIF_TERM msg;
 
-  r = read (state->fd, buffer, 16384);
-  if (r <= 0) return r;
-  buffer_i = 0;
+  length = read (state->fd, buffer, EVENT_BUF_LEN);
+  if (length <= 0) return length;
 
-  while (buffer_i < r) {
-    pevent = (struct inotify_event *) &buffer[buffer_i];
-    event_size =  offsetof (struct inotify_event, name) + pevent->len;
-    buffer_i += event_size;
-    fprintf(stderr,
-            "inotify_erlang:note_read  len: %d idx: %d event %d %x %x %s %d\r\n",
-            r, buffer_i, pevent->wd, pevent->mask, pevent->cookie, pevent->name, pevent->len);
+  while (buffer_i < length) {
+    struct inotify_event *pevent = (struct inotify_event *) &buffer[buffer_i];
+    buffer_i +=  EVENT_SIZE + pevent->len;
+    /* fprintf(stderr, */
+    /*         "inotify_erlang:note_read  len: %d idx: %d event %d %x %x %s %d\r\n", */
+    /*         length, buffer_i, pevent->wd, pevent->mask, pevent->cookie, pevent->name, pevent->len); */
+    ERL_NIF_TERM name;
+    if (pevent->len) {
+      name = enif_make_string(env, pevent->name, ERL_NIF_LATIN1);
+    }
+    else {
+      name = enif_make_string(env, "", ERL_NIF_LATIN1);
+    }
     msg = enif_make_tuple6(env,
                            enif_make_atom(env, "inotify_event"),
                            enif_make_int(env, pevent->wd),
                            atom_file_type(env, pevent->mask),
                            atom_event(env, pevent->mask),
                            enif_make_int(env, pevent->cookie),
-                           enif_make_string_len(env, pevent->name, pevent->len, ERL_NIF_LATIN1)
+                           name
                            );
     enif_send(NULL, state->pid, env, msg);
     enif_clear_env(env);
