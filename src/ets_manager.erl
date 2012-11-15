@@ -1,4 +1,4 @@
--module(erlinotify_table_manager).
+-module(ets_manager).
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
 
@@ -45,8 +45,6 @@ start_link() ->
 init([]) ->
     Opts = [set, protected, {keypos,1}, {heir,self()},
             {write_concurrency,false}, {read_concurrency,false}],
-%%    Dir = ets:new(filenames, Opts),
-%%    Wds = ets:new(watchdescriptors, Opts),
     {ok, #state{opts=Opts}}.
 
 handle_call({get, dirname}, {Pid, _Tag}, State) ->
