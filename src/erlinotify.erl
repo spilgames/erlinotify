@@ -56,8 +56,10 @@ start_link() ->
 init([]) ->
     {ok,Fd} = erlinotify_nif:start(),
     io:fwrite(standard_error,"~p~n",[Fd]),
+    Ds = ets_manager:give_me(dirnames),
+    Wds = ets_manager:give_me(watchdescriptors),
     X = fun(E) -> io:fwrite(standard_error,"~p~n",[E]) end,
-    {ok, #state{fd=Fd, callback=X}}.
+    {ok, #state{fd=Fd, callback=X, dirnames = Ds, watchdescriptors=Wds}}.
 
 %%----------------------------------------------------------------------
 %% Func: handle_call/3
