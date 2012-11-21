@@ -103,6 +103,12 @@ handle_info({inotify_event, Wd, Type, Event, Cookie, Name} = Info, State) ->
       [{Wd, File}] -> CB({File, Type, Event, Cookie, Name}),
                       {noreply, State}
   end;
+handle_info({'ETS-TRANSFER', _Tid, _Pid, new_table}, State) ->
+    %% log at some point?
+    {noreply, State};
+handle_info({'ETS-TRANSFER', _Tid, _Pid, reissued} = Info, State) ->
+    ?log({rewatch_this, Info}),
+    {noreply, State};
 handle_info(Info, State) ->
   ?log({unknown_message, Info}),
   {noreply, State}.
