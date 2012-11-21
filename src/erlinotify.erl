@@ -14,7 +14,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/0]).
+-export([start_link/0, watch/1, unwatch/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -41,6 +41,12 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
+watch(Name) ->
+    gen_server:cast(?MODULE, {watch, Name}).
+
+unwatch(Name) ->
+    gen_server:cast(?MODULE, {unwatch, Name}).
+
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
@@ -55,9 +61,8 @@ start_link() ->
 
 init([]) ->
     {ok,Fd} = erlinotify_nif:start(),
-    io:fwrite(standard_error,"~p~n",[Fd]),
-    Ds = ets_manager:give_me(dirnames),
-    Wds = ets_manager:give_me(watchdescriptors),
+    {ok, Ds} = ets_manager:give_me(dirnames),
+    {ok, Wds} = ets_manager:give_me(watchdescriptors),
     X = fun(E) -> io:fwrite(standard_error,"~p~n",[E]) end,
     {ok, #state{fd=Fd, callback=X, dirnames = Ds, watchdescriptors=Wds}}.
 
@@ -106,9 +111,18 @@ handle_info({inotify_event, Wd, Type, Event, Cookie, Name} = Info, State) ->
 handle_info({'ETS-TRANSFER', _Tid, _Pid, new_table}, State) ->
     %% log at some point?
     {noreply, State};
-handle_info({'ETS-TRANSFER', _Tid, _Pid, reissued} = Info, State) ->
+handle_info({'ETS-TRANSFER', Tid, _Pid, reissued} = Info, State) ->
     ?log({rewatch_this, Info}),
-    {noreply, State};
+    case ets:info(Tid, name) of
+        dirnames -> case rewatch(State) of
+                        {ok, State} -> ok,
+                                       {noreply, State};
+                        Error -> ?log({error,Error}),
+                                 {noreply, State}
+                    end;
+        _DontCare -> ?log({ignored, Info}),
+                     {noreply, State}
+    end;
 handle_info(Info, State) ->
   ?log({unknown_message, Info}),
   {noreply, State}.
