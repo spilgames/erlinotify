@@ -14,7 +14,7 @@
 %% API Function Exports
 %% ------------------------------------------------------------------
 
--export([start_link/0, watch/1, unwatch/1]).
+-export([start_link/0, watch/1, unwatch/1, assign_callback/1]).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
@@ -46,6 +46,9 @@ watch(Name) ->
 
 unwatch(Name) ->
     gen_server:cast(?MODULE, {unwatch, Name}).
+
+assign_callback(Fn) ->
+    gen_server:cast(?MODULE, {assign_callback, Fn}).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -90,6 +93,10 @@ handle_cast({watch, Watch}, State) ->
   {noreply, do_watch(Watch, State)};
 handle_cast({unwatch, Unwatch}, State) ->
   {noreply, do_unwatch(Unwatch, State)};
+handle_cast({assign_callback, Fn},
+            #state{fd=Fd, callback=_X, dirnames = Ds, watchdescriptors=Wds}) ->
+    NewState = #state{fd=Fd, callback=Fn, dirnames = Ds, watchdescriptors=Wds},
+    {noreply, NewState};
 handle_cast(Msg, State) ->
   ?log({unknown_message, Msg}),
   {noreply, State}.
