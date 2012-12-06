@@ -152,7 +152,7 @@ do_watch(File, State) ->
     case erlinotify_nif:add_watch(State#state.fd, File) of
         {ok, Wd} -> ets:insert(State#state.watchdescriptors, {Wd, File}),
                     State;
-        Error -> ?log(Error),
+        Error -> ?log([Error, File]),
                  State
     end.
 
@@ -162,7 +162,7 @@ do_watch(File, CB, State) ->
                     ets:insert(State#state.callbacks, {File, CB}),
                     ets:insert(State#state.watchdescriptors, {Wd, File}),
                     State;
-        Error -> ?log(Error),
+        Error -> ?log([Error, File]),
                  State
     end.
 
