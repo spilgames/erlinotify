@@ -230,8 +230,7 @@ thr_main(void* obj)
     FD_ZERO (&rfds);
     FD_SET (state->fd, &rfds);
     while(select (FD_SETSIZE, &rfds, NULL, NULL, NULL) > 0){
-      int r;
-      r = read_events(state);
+      read_events(state);
     }
     return NULL;
 }
